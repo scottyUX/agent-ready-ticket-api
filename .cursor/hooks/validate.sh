@@ -1,6 +1,30 @@
 #!/usr/bin/env bash
-# Cursor stop hook. Rules and skills guide the agent. This script checks the
-# result by delegating to scripts/validate.sh.
+# Stop hook for the agent host.
+#
+# The model does not call this script. The host runs it when an agent turn
+# ends, because .cursor/hooks.json registers it on the "stop" event.
+#
+# The host writes one JSON object to stdin:
+#   {"status": "completed" | "aborted" | "error", "loop_count": <number>}
+#
+# This script writes one JSON object to stdout and always exits 0.
+# A non-zero exit means the hook itself crashed, not that validation failed.
+#
+#   status "aborted" or "error"
+#     The turn did not finish normally. Print {} and do not run validation.
+#
+#   status "completed" and scripts/validate.sh passes
+#     The agent stopped and the tree is valid. Print {}. The host ends the turn.
+#
+#   status "completed" and scripts/validate.sh fails
+#     Print {"followup_message": "..."}. The host submits that text as the
+#     next user message, which starts another agent turn.
+#
+# hooks.json sets "loop_limit": 2. After two follow-ups the host stops
+# invoking this script, even if validation is still failing.
+#
+# The commands live in scripts/validate.sh. This file only decides whether
+# to run that script and how to report the result.
 
 set -uo pipefail
 

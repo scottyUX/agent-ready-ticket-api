@@ -1,10 +1,10 @@
 # Agent-ready ticket API
 
-A one-hour university lab. The application is a small support-ticket API. The repository around it shows how Cursor uses context, product intent, scoped rules, skills, subagents, a validation script, and hooks.
+The application is a small support-ticket API. The repository around it shows how an agent uses context, product intent, scoped rules, skills, subagents, a validation script, and hooks.
 
 Repository: https://github.com/scottyUX/agent-ready-ticket-api
 
-Open this directory as the Cursor workspace. Cursor discovers `.cursor/` from the workspace root. Opening the parent folder hides these project files from the IDE.
+Open this directory as the project workspace. Agent configuration under `.cursor/` is discovered from the workspace root. Opening the parent folder hides these project files.
 
 The base API is complete. The exercises in `docs/TASKS.md` are intentionally not implemented.
 
@@ -116,19 +116,19 @@ agent-ready-ticket-api/
 
 ## Files the agent uses
 
-Cursor does not load every markdown file. Open these in order during the walkthrough. The behavior below follows the current Cursor docs for [rules](https://cursor.com/docs/rules), [skills](https://cursor.com/docs/context/skills), [subagents](https://cursor.com/docs/context/subagents), and [hooks](https://cursor.com/docs/hooks).
+An agent does not load every markdown file. Open these in order during the walkthrough.
 
 ### `AGENTS.md`
 
-Cursor reads `AGENTS.md` as plain agent instructions. It is the simple alternative to `.cursor/rules`: no frontmatter, no globs. Cursor discovers it in the project root and in subdirectories. A nested file combines with the parent files, and the nearer file wins when they disagree. This repository has one root file. It maps the directories, lists the commands, and links to the other documents. The long procedures stay out of it.
+`AGENTS.md` is plain agent instructions. It is the simple alternative to `.cursor/rules`: no frontmatter, no globs. Agents that follow the `AGENTS.md` convention discover it in the project root and in subdirectories. A nested file combines with the parent files, and the nearer file wins when they disagree. This repository has one root file. It maps the directories, lists the commands, and links to the other documents. The long procedures stay out of it.
 
 ### `intent.md`
 
-`intent.md` is not a Cursor filename. Cursor leaves it alone until something asks the agent to open it. In this repository, `AGENTS.md` puts it first in the reading order. It states the supported ticket behavior and the non-goals, including authentication and persistent storage. A change can pass the tests and still violate this file.
+`intent.md` is not a special agent filename. The agent leaves it alone until something asks it to open the file. In this repository, `AGENTS.md` puts it first in the reading order. It states the supported ticket behavior and the non-goals, including authentication and persistent storage. A change can pass the tests and still violate this file.
 
 ### Rules — `.cursor/rules/`
 
-Project rules are `.mdc` files with `description`, `globs`, and `alwaysApply`. A plain `.md` file in this folder is ignored. Both rules here use `alwaysApply: false` and file globs, which is Cursor's "apply to specific files" mode. The rule is added to the agent prompt when a matching file is in context.
+Project rules are `.mdc` files with `description`, `globs`, and `alwaysApply`. A plain `.md` file in this folder is ignored. Both rules here use `alwaysApply: false` and file globs, so they apply only to matching files. The rule is added to the agent prompt when a matching file is in context.
 
 | File | Loads with |
 | --- | --- |
@@ -139,24 +139,36 @@ Project rules are `.mdc` files with `description`, `globs`, and `alwaysApply`. A
 
 ### Skills — `.cursor/skills/`
 
-A skill is a folder with `SKILL.md`. Cursor discovers `.cursor/skills/` at startup and shows each skill's `name` and `description` to the agent. The agent applies a skill when the description matches the request. You can also attach one for a single message with `/add-endpoint` or `/fix-bug`.
+A skill is a folder with `SKILL.md`. The agent discovers `.cursor/skills/` from the project and reads each skill's `name` and `description`. It applies a skill when the description matches the request. You can also attach one for a single message with `/add-endpoint` or `/fix-bug`.
 
 | Skill | Use it for |
 | --- | --- |
 | `.cursor/skills/add-endpoint/SKILL.md` | A new or changed endpoint, its models, and its tests |
 | `.cursor/skills/fix-bug/SKILL.md` | A defect, including task 4 |
 
-These skills leave out `disable-model-invocation`, so Cursor may select them automatically. The body is the procedure: failing test, smallest change, then `./scripts/validate.sh`.
+These skills leave out `disable-model-invocation`, so the agent may select them automatically. The body is the procedure: failing test, smallest change, then `./scripts/validate.sh`.
 
 ### Hooks — `.cursor/hooks.json`
 
-Hooks run a script at an agent lifecycle event. Rules and skills are instructions. A hook is a program. This repository's `stop` hook runs `.cursor/hooks/validate.sh` when an agent turn ends. That script calls `./scripts/validate.sh` and does not repeat the Ruff or pytest commands.
+Rules and skills are text the model may follow. A hook is a program the agent host runs. The model does not choose to call it.
 
-A passing run prints `{}` and the turn can end. A failing run prints `followup_message`, which Cursor can submit as the next user message. `loop_limit` is `2`, so a failure that stays red cannot loop forever. `.githooks/pre-commit` calls the same validation script and rejects the commit. Install it with `./scripts/install-hooks.sh`. That setting is local to the clone.
+`.cursor/hooks.json` registers one event, `stop`. The host calls it when an agent turn ends, before the conversation is allowed to stay finished.
+
+1. The turn ends. The host starts `.cursor/hooks/validate.sh` and writes one JSON object to the script's stdin: `{"status": "completed" | "aborted" | "error", "loop_count": 0}`.
+2. `completed` means the agent stopped on its own. `aborted` means the turn was cancelled. `error` means the turn failed. `loop_count` is how many times this hook has already sent a follow-up in the conversation.
+3. For `aborted` or `error`, the script skips validation and prints `{}`. The host does not start another turn.
+4. For `completed`, the script runs `./scripts/validate.sh`. It does not repeat the Ruff or pytest commands.
+5. When validation passes, stdout is `{}` and the turn stays finished.
+6. When validation fails, stdout is `{"followup_message": "..."}` and the exit code is `0`. The host treats that message as the next user message and starts another agent turn so the agent can fix the failure.
+7. `loop_limit` in `hooks.json` is `2`. After two follow-ups, the host stops calling the hook again even if validation is still failing.
+
+Git calls a different hook. `.githooks/pre-commit` runs when `git commit` starts, calls the same validation script, and a non-zero exit blocks the commit. Install it with `./scripts/install-hooks.sh`. That setting applies only to this clone.
+
+`hooks.json` is JSON, so the explanation of each step lives in `.cursor/hooks/validate.sh`.
 
 ### `docs/`
 
-`docs/` is ordinary markdown. Cursor has no special loader for it. The agent opens a file here when `AGENTS.md`, a skill, or your prompt names that file.
+`docs/` is ordinary markdown. The agent has no special loader for that directory. It opens a file here when `AGENTS.md`, a skill, or your prompt names that file.
 
 | File | What to say in the walkthrough |
 | --- | --- |
@@ -170,7 +182,7 @@ A passing run prints `{}` and the turn can end. A failing run prints `followup_m
 
 | Component | What it does in this repo |
 | --- | --- |
-| `AGENTS.md` | Orientation Cursor discovers automatically |
+| `AGENTS.md` | Orientation an agent discovers from the project root |
 | `intent.md` | Product boundary the agent reads because `AGENTS.md` points to it |
 | `.cursor/rules/` | Instructions injected only for matching files |
 | `.cursor/skills/` | Procedures the agent can select or you can invoke with `/` |
@@ -182,13 +194,13 @@ A passing run prints `{}` and the turn can end. A failing run prints `followup_m
 Observed behavior                       Repository component
 Agent finds the correct commands        AGENTS.md
 Agent avoids out-of-scope features      intent.md
-API constraints load with API files     Scoped Cursor rule
+API constraints load with API files     Scoped rule
 Agent follows a test-first procedure    Skill
 Invalid completion is blocked           Hook
 Implementation receives fresh review    Reviewer subagent
 ```
 
-## Using the Cursor skills
+## Using the skills
 
 Skills are procedures. Invoke one by naming it:
 
@@ -197,7 +209,7 @@ Use the add-endpoint skill to add ticket priority from docs/TASKS.md task 1.
 Use the fix-bug skill for the resolved-ticket transition in docs/TASKS.md task 4.
 ```
 
-Cursor can also select a skill when the request matches its description. Tasks 1–3 match `add-endpoint`. Task 4 matches `fix-bug`.
+The agent can also select a skill when the request matches its description. Tasks 1–3 match `add-endpoint`. Task 4 matches `fix-bug`.
 
 The skill tells the agent to write a failing behavioral test, confirm the failure, make the smallest change, and run `./scripts/validate.sh`.
 
@@ -267,7 +279,7 @@ Question: What would two tests that both expect id `1` start doing if the reset 
 
 Show the directory map, the command block, the invariants, and the "ask a person" list. Point at the links instead of reading every procedure into this file.
 
-This is the onboarding page Cursor discovers for an unfamiliar agent. It answers where to go and which command to run.
+This is the onboarding page an agent discovers for an unfamiliar repository. It answers where to go and which command to run.
 
 Question: Where does the nine-step endpoint procedure live, and why is it absent from this page?
 
@@ -279,7 +291,7 @@ Product intent is the boundary. It tells the agent which working features are st
 
 Question: The tests pass after an agent adds SQLite. Which document says that change is still out of scope?
 
-### 5. Cursor rules
+### 5. Rules
 
 Open `.cursor/rules/api.mdc` and `.cursor/rules/tests.mdc`. Show `alwaysApply: false` and the `globs`. Open a route file and a test file and show which rule attaches. Then open `README.md` and show that neither rule is required there.
 
@@ -287,7 +299,7 @@ A scoped rule travels with the files it governs. The API rule stays out of an ed
 
 Question: What would go wrong in a documentation edit if the API rule used `alwaysApply: true`?
 
-### 6. Cursor skills
+### 6. Skills
 
 Open `.cursor/skills/add-endpoint/SKILL.md`. Walk steps 4 through 8: failing test, confirm the failure, smallest change, targeted pytest, then `./scripts/validate.sh`.
 
@@ -303,13 +315,13 @@ One script keeps formatting, lint, and tests from drifting into slightly differe
 
 Question: Why do the skill and both hooks call this file instead of listing `ruff` and `pytest` themselves?
 
-### 8. Git and Cursor hooks
+### 8. Git and agent hooks
 
-Show `.githooks/pre-commit`, `scripts/install-hooks.sh`, `.cursor/hooks.json`, and `.cursor/hooks/validate.sh`. Point at `loop_limit` and at the hook printing `{}` or `followup_message`. Run `./scripts/install-hooks.sh` and say that it changes this clone only.
+Show `.githooks/pre-commit`, `scripts/install-hooks.sh`, `.cursor/hooks.json`, and the comments in `.cursor/hooks/validate.sh`. Point at `loop_limit` and at the hook printing `{}` or `followup_message`. Run `./scripts/install-hooks.sh` and say that it changes this clone only.
 
-Rules and skills advise the model. The pre-commit hook refuses a commit when validation fails. The Cursor `stop` hook runs the same script after an agent turn and can send the failure back for another turn. `loop_limit` is `2`, so a failure that will not go green cannot loop forever.
+Rules and skills advise the model. The pre-commit hook refuses a commit when validation fails. The `stop` hook runs the same script after an agent turn and can send the failure back for another turn. `loop_limit` is `2`, so a failure that will not go green cannot loop forever.
 
-Question: Why does the Cursor hook delegate to `scripts/validate.sh` instead of running `pytest` itself?
+Question: Why does the agent hook delegate to `scripts/validate.sh` instead of running `pytest` itself?
 
 ### 9. Planner subagent
 
@@ -341,9 +353,9 @@ Question: Which skill starts task 4, and which command has to pass before the st
 
 **`ruff` or `pytest` is not found.** Activate `.venv`. `scripts/validate.sh` prepends `.venv/bin` to `PATH` when that directory exists, which is what the hooks rely on.
 
-**Cursor does not show the rules, skills, or subagents.** Open `agent-ready-ticket-api` itself as the workspace, then restart Cursor if `.cursor/hooks.json` was just added.
+**Rules, skills, or subagents do not appear.** Open `agent-ready-ticket-api` itself as the workspace, then reload the window if `.cursor/hooks.json` was just added.
 
-**The stop hook never runs.** In Cursor settings, confirm project hooks are enabled. The Hooks output channel should show `stop hook: validation passed` after an agent turn. The script also runs from the terminal:
+**The stop hook never runs.** Confirm project hooks are enabled. After a completed agent turn, the hook log should show `stop hook: validation passed`. The script also runs from the terminal:
 
 ```bash
 printf '%s' '{"status":"completed","loop_count":0}' | .cursor/hooks/validate.sh
@@ -359,11 +371,11 @@ A passing tree prints `{}`. Status `aborted` skips validation and still prints `
 
 ## Before class
 
-Confirm this Cursor build against the files in `.cursor/`:
+Confirm the agent loads the files in `.cursor/`:
 
 - Project rules are `.mdc` files with `description`, `globs`, and `alwaysApply: false`.
 - Skills live at `.cursor/skills/<name>/SKILL.md` and can be named in the prompt.
 - Subagents live at `.cursor/agents/<name>.md`. Invoke them with `/planner` and `/reviewer`. Their `model` value is the unquoted word `inherit`.
-- Hooks use schema version 1. The `stop` hook may return `{"followup_message": "..."}` and honors `loop_limit`.
+- The hook file uses schema version 1. The `stop` hook may return `{"followup_message": "..."}` and honors `loop_limit`.
 
-Spend one minute in a scratch chat to see a scoped rule attach, `/planner` return the plan format, and the Hooks channel print `stop hook: validation passed`.
+Spend one minute in a scratch chat to see a scoped rule attach, `/planner` return the plan format, and the hook log print `stop hook: validation passed`.
