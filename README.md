@@ -114,21 +114,69 @@ agent-ready-ticket-api/
 └── .githooks/pre-commit
 ```
 
-## Agent-readiness components
+## Files the agent uses
 
-Each artifact has one job. The long procedures stay in the skills. The orientation stays in `AGENTS.md`.
+Cursor does not load every markdown file. Open these in order during the walkthrough. The behavior below follows the current Cursor docs for [rules](https://cursor.com/docs/rules), [skills](https://cursor.com/docs/context/skills), [subagents](https://cursor.com/docs/context/subagents), and [hooks](https://cursor.com/docs/hooks).
+
+### `AGENTS.md`
+
+Cursor reads `AGENTS.md` as plain agent instructions. It is the simple alternative to `.cursor/rules`: no frontmatter, no globs. Cursor discovers it in the project root and in subdirectories. A nested file combines with the parent files, and the nearer file wins when they disagree. This repository has one root file. It maps the directories, lists the commands, and links to the other documents. The long procedures stay out of it.
+
+### `intent.md`
+
+`intent.md` is not a Cursor filename. Cursor leaves it alone until something asks the agent to open it. In this repository, `AGENTS.md` puts it first in the reading order. It states the supported ticket behavior and the non-goals, including authentication and persistent storage. A change can pass the tests and still violate this file.
+
+### Rules — `.cursor/rules/`
+
+Project rules are `.mdc` files with `description`, `globs`, and `alwaysApply`. A plain `.md` file in this folder is ignored. Both rules here use `alwaysApply: false` and file globs, which is Cursor's "apply to specific files" mode. The rule is added to the agent prompt when a matching file is in context.
+
+| File | Loads with |
+| --- | --- |
+| `.cursor/rules/api.mdc` | `app/routes/**/*.py`, `app/models.py` |
+| `.cursor/rules/tests.mdc` | `tests/**/*.py` |
+
+`api.mdc` requires Pydantic models, explicit responses, stable error bodies, and tests for the behavior you change. `tests.mdc` requires public-API tests, arrange/act/assert, and a storage reset. Opening `README.md` loads neither rule.
+
+### Skills — `.cursor/skills/`
+
+A skill is a folder with `SKILL.md`. Cursor discovers `.cursor/skills/` at startup and shows each skill's `name` and `description` to the agent. The agent applies a skill when the description matches the request. You can also attach one for a single message with `/add-endpoint` or `/fix-bug`.
+
+| Skill | Use it for |
+| --- | --- |
+| `.cursor/skills/add-endpoint/SKILL.md` | A new or changed endpoint, its models, and its tests |
+| `.cursor/skills/fix-bug/SKILL.md` | A defect, including task 4 |
+
+These skills leave out `disable-model-invocation`, so Cursor may select them automatically. The body is the procedure: failing test, smallest change, then `./scripts/validate.sh`.
+
+### Hooks — `.cursor/hooks.json`
+
+Hooks run a script at an agent lifecycle event. Rules and skills are instructions. A hook is a program. This repository's `stop` hook runs `.cursor/hooks/validate.sh` when an agent turn ends. That script calls `./scripts/validate.sh` and does not repeat the Ruff or pytest commands.
+
+A passing run prints `{}` and the turn can end. A failing run prints `followup_message`, which Cursor can submit as the next user message. `loop_limit` is `2`, so a failure that stays red cannot loop forever. `.githooks/pre-commit` calls the same validation script and rejects the commit. Install it with `./scripts/install-hooks.sh`. That setting is local to the clone.
+
+### `docs/`
+
+`docs/` is ordinary markdown. Cursor has no special loader for it. The agent opens a file here when `AGENTS.md`, a skill, or your prompt names that file.
+
+| File | What to say in the walkthrough |
+| --- | --- |
+| `docs/architecture.md` | Request path, and which module owns validation, HTTP, and storage |
+| `docs/decisions/0001-in-memory-storage.md` | Why tickets live in a dictionary, and when to revisit that choice |
+| `docs/TASKS.md` | Four lab tasks. The base API is complete without them |
+
+### Subagents — `.cursor/agents/`
+
+`.cursor/agents/planner.md` and `.cursor/agents/reviewer.md` are custom subagents. Each has its own context. Both set `readonly: true`, so they return a report and do not edit files. Invoke them with `/planner` and `/reviewer`.
 
 | Component | What it does in this repo |
 | --- | --- |
-| Context (`AGENTS.md`) | Tells an unfamiliar agent where things are and which commands to run |
-| Product intent (`intent.md`) | Defines the supported behavior and the non-goals |
-| Scoped rules (`.cursor/rules/*.mdc`) | Load only when a matching file is in context |
-| Skills (`.cursor/skills/*/SKILL.md`) | Give a repeatable procedure for adding an endpoint or fixing a bug |
-| Subagents (`.cursor/agents/*.md`) | Plan or review in a separate context that does not edit files |
-| Validation script (`scripts/validate.sh`) | Runs the same format, lint, and test commands every time |
-| Hooks | Run that script on commit and after an agent turn |
-
-Written guidance can be ignored by a model. A hook runs a program. Use a rule or a skill when the goal is to shape a change. Use a hook when the goal is to execute a check.
+| `AGENTS.md` | Orientation Cursor discovers automatically |
+| `intent.md` | Product boundary the agent reads because `AGENTS.md` points to it |
+| `.cursor/rules/` | Instructions injected only for matching files |
+| `.cursor/skills/` | Procedures the agent can select or you can invoke with `/` |
+| `.cursor/hooks.json` | Script that runs after an agent turn |
+| `docs/` | Reference the agent opens only when a task names it |
+| `.cursor/agents/` | Separate planning and review passes |
 
 ```text
 Observed behavior                       Repository component
