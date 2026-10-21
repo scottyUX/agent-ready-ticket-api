@@ -2,6 +2,8 @@
 
 A one-hour university lab. The application is a small support-ticket API. The repository around it shows how Cursor uses context, product intent, scoped rules, skills, subagents, a validation script, and hooks.
 
+Repository: https://github.com/scottyUX/agent-ready-ticket-api
+
 Open this directory as the Cursor workspace. Cursor discovers `.cursor/` from the workspace root. Opening the parent folder hides these project files from the IDE.
 
 The base API is complete. The exercises in `docs/TASKS.md` are intentionally not implemented.
@@ -24,9 +26,11 @@ The base API is complete. The exercises in `docs/TASKS.md` are intentionally not
 
 ## Installation
 
-From this directory:
+Clone the assignment, then install from that directory:
 
 ```bash
+git clone https://github.com/scottyUX/agent-ready-ticket-api.git
+cd agent-ready-ticket-api
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
