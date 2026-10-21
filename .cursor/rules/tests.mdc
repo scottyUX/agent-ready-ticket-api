@@ -1,0 +1,25 @@
+---
+description: Constraints for behavioral ticket API tests.
+globs: tests/**/*.py
+alwaysApply: false
+---
+
+# Ticket test constraints
+
+These constraints load with test files so new tests describe HTTP behavior and stay isolated. They stay inactive when the files in context are only application code.
+
+- Call the public API through `TestClient`. Exercise the running routes.
+- Give each test an arrange section, an act section, and an assert section.
+- Cover the success path and at least one failure path for the behavior you change.
+- Reset storage with the existing autouse fixture that calls `ticket_repository.reset()`. A test must pass when it runs alone and when the file runs in any order.
+- Assert status codes, response bodies, and later `GET` results. Leave private repository fields and call counts out of assertions.
+
+```python
+def test_get_missing_ticket_returns_not_found(client: TestClient) -> None:
+    # Act
+    response = client.get("/tickets/99")
+
+    # Assert
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Ticket not found."}
+```

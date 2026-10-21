@@ -1,0 +1,26 @@
+---
+description: Constraints for ticket routes and request or response models.
+globs: app/routes/**/*.py, app/models.py
+alwaysApply: false
+---
+
+# Ticket API constraints
+
+These constraints load with route and model files so an API edit stays inside the HTTP contract. They stay inactive while you are only reading docs or hooks.
+
+- Define request and response bodies as Pydantic models in `app/models.py`.
+- Set `response_model` on every endpoint. Declare `ErrorResponse` for the error status codes that endpoint returns.
+- Use 201 when creating a ticket, 200 when reading or updating, 404 when the id is missing, and 422 when the request is invalid.
+- Return `{"detail": "<message>"}` for errors. The message must not include a traceback, an exception class name, or `repr` of an exception.
+- A behavior change needs a success test and a failure test in `tests/test_tickets.py`.
+- Implement the requested behavior only. Leave the other tasks in `docs/TASKS.md` unimplemented.
+
+```python
+# Prefer an explicit response and a stable not-found body.
+@router.get("/{ticket_id}", response_model=Ticket, responses={404: {"model": ErrorResponse}})
+def get_ticket(ticket_id: int) -> Ticket:
+    ticket = ticket_repository.get(ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found.")
+    return ticket
+```
